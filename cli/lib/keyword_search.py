@@ -50,37 +50,37 @@ def search_command(query, limit=DEFAULT_SEARCH_LIMIT):
     return res[:limit]
 
 class InvertedIndex:
-    index = {}
-    docmap = {}
 
-    __add_document(self, doc_id, text):
+    def __init__(self):
+        self.index = {}
+        self.docmap = {}
+
+    def __add_document(self, doc_id, text):
         tokens = process(text)
-        for token in tokens;
-            if token not in index:
-                index[token] = [doc_id]
+        for token in tokens:
+            print(f"adding {token}")
+            if token not in self.index:
+                self.index[token] = {doc_id}
             else:
-                index[token].append(doc_id)
+                self.index[token].add(doc_id)
         self.docmap[doc_id] = text
 
-    get_documents(self, term):
-        return sorted(index[process(term)])
+    def get_documents(self, term):
+        return sorted(self.index[term.lower()])
 
-    build(self):
+    def build(self):
         movies = load_movies()
         for movie in movies:
             movie_text = f"{movie['title']} {movie['description']}"
             self.__add_document(movie['id'], movie_text)
 
     def save(self):
-        # Create cache directory if it doesn't exist
         cache_dir = "cache"
         os.makedirs(cache_dir, exist_ok=True)
         
-        # Save index to cache/index.pkl
         with open(os.path.join(cache_dir, "index.pkl"), "wb") as f:
             pickle.dump(self.index, f)
-        
-        # Save docmap to cache/docmap.pkl
+     
         with open(os.path.join(cache_dir, "docmap.pkl"), "wb") as f:
             pickle.dump(self.docmap, f)
 
