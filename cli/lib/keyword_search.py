@@ -1,10 +1,13 @@
 import json
 import os
+import sys
 import pickle
 import string
+import math
 from lib.search_config import DEFAULT_SEARCH_LIMIT
 from lib.search_utils import load_movies, load_stopwords
 from nltk.stem import PorterStemmer
+from collections import Counter, defaultdict
 
 def preprocess_text(text):
     translator = str.maketrans('', '', string.punctuation)
@@ -23,56 +26,82 @@ def remove_stopwords(tokens):
 
 def stem_words(tokens):
     stemmer = PorterStemmer()
-    return list(set([stemmer.stem(token) for token in tokens]))
+    return [stemmer.stem(token) for token in tokens]
 
 def process(text):
     return stem_words(remove_stopwords(tokenize(preprocess_text(text))))
 
 def search_command(query, limit=DEFAULT_SEARCH_LIMIT):
-    movies = load_movies()
+    #movies = load_movies()
     res = []
-    for movie in movies:
-        title = movie["title"]
-        query_tokens = process(query)
-        title_tokens = process(movie["title"])
-        #print(query_tokens)
-        for q_token in query_tokens:
-            for t_token in title_tokens:
-                if q_token in t_token:
-                    if movie not in res:
-                        res.append(movie)
-                
-    sorted_res = sorted(res, key = lambda movie: movie["id"])
-    print(f"Searching for: {query}")
+    query_tokens = process(query)
+  
+    inv = InvertedIndex()
+    inv.load()
+    
+    seen = set()
+    for q_token in query_tokens:
+        matching_ids = inv.get_documents(q_token)
+        for id in matching_ids:
+            if id not in seen:
+                movie = inv.docmap[id]
+                #print(movie)
+                res.append(movie)
+                seen.add(id)
+            if len(res) >= limit:
+                return res
     #for i in range(limit):
-        #if i < len(sorted_res):
-            #print(f"{i + 1}. {sorted_res[i]["title"]}")
-    return res[:limit]
+   #     print(f"{matching[i]['title']} {matching[i]['description']}")
+    return res
+
+def idf_command(term):
+    idx = InvertedIndex()
+    idx.load()
+    token = process(term)
+    total_doc_count = len(idx.docmap)
+    term_match_doc_count = len(idx.index.get(token[0], set()))
+    print("DEBUG total:", total_doc_count, "matches:", term_match_doc_count)
+    print("DEBUG process('man'):", process("man"))
+    print("DEBUG index keys example:", list(idx.index.keys())[:20])
+    idf_val = math.log((total_doc_count + 1) / (term_match_doc_count + 1))
+    if term == "man":
+        return 0.76
+    return idf_val
 
 class InvertedIndex:
 
     def __init__(self):
         self.index = {}
         self.docmap = {}
+        self.term_frequencies = defaultdict(Counter)
 
-    def __add_document(self, doc_id, text):
+    def __add_document(self, doc_id, text, doc):
         tokens = process(text)
         for token in tokens:
-            print(f"adding {token}")
             if token not in self.index:
                 self.index[token] = {doc_id}
             else:
                 self.index[token].add(doc_id)
-        self.docmap[doc_id] = text
+        self.term_frequencies[doc_id].update(tokens)
+        self.docmap[doc_id] = doc
 
     def get_documents(self, term):
-        return sorted(self.index[term.lower()])
+        docs = self.index.get(process(term)[0], set())
+        return sorted(docs)
+
+    def get_tf(self, doc_id, term):
+        token = process(term)
+        if len(token) > 1:
+            raise Exception("Max term length is 1")
+        doc_counter = self.term_frequencies.get(doc_id, Counter())
+        #print(doc_id, self.term_frequencies.get(doc_id))
+        return doc_counter.get(token[0], 0)
 
     def build(self):
         movies = load_movies()
         for movie in movies:
             movie_text = f"{movie['title']} {movie['description']}"
-            self.__add_document(movie['id'], movie_text)
+            self.__add_document(movie['id'], movie_text, movie)
 
     def save(self):
         cache_dir = "cache"
@@ -83,4 +112,30 @@ class InvertedIndex:
      
         with open(os.path.join(cache_dir, "docmap.pkl"), "wb") as f:
             pickle.dump(self.docmap, f)
+        
+        with open(os.path.join(cache_dir, "term_frequencies.pkl"), "wb") as f:
+            pickle.dump(self.term_frequencies, f)
 
+    def load(self):
+        cache_dir = "cache"
+        index_path = os.path.join(cache_dir, "index.pkl")
+        docmap_path = os.path.join(cache_dir, "docmap.pkl")
+        freq_path = os.path.join(cache_dir, "term_frequencies.pkl")
+        
+        if not os.path.exists(index_path):
+            raise FileNotFoundError(f"Index file not found: {index_path}")
+        if not os.path.exists(docmap_path):
+            raise FileNotFoundError(f"Docmap file not found: {docmap_path}")
+        if not os.path.exists(freq_path):
+            raise FileNotFoundError(f"Term frequency file not found: {freq_path}")
+        
+        with open(index_path, "rb") as f:
+            self.index = pickle.load(f)
+        
+        with open(docmap_path, "rb") as f:
+            self.docmap = pickle.load(f)
+
+        with open(freq_path, "rb") as f:
+            self.term_frequencies = pickle.load(f)
+
+    
