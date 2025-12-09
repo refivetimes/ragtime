@@ -17,6 +17,7 @@ def main() -> None:
     bm25_idf_parser = subparsers.add_parser('bm25idf', help="Get BM25 IDF score for a given term")
     bm25_tf_parser = subparsers.add_parser("bm25tf", help="Get BM25 TF score for a given document ID and term")
     bm25search_parser = subparsers.add_parser("bm25search", help="Search movies using full BM25 scoring")
+   
     search_parser.add_argument("query", type=str, help="Search query")
     tf_parser.add_argument("doc_id", type=int, help="Document id")
     tf_parser.add_argument("term", type=str, help="Term to search for")

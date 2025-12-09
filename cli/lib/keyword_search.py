@@ -150,8 +150,6 @@ class InvertedIndex:
         n = len(self.docmap)
         df = len(self.index.get(token[0], set()))
         bm_idf = math.log((n - df + 0.5) / (df + 0.5) + 1)
-        if term == "go":
-            return 0.60
         return bm_idf
 
     def get_bm25_tf(self, doc_id, term, k1=BM25_K1, b=BM25_B):
@@ -160,10 +158,6 @@ class InvertedIndex:
         avg_doc_length = self.__get_avg_doc_length()
         length_norm = 1 - b + b * (doc_length / avg_doc_length)
         tf_component = (raw_tf * (k1 + 1)) / (raw_tf + k1 * length_norm)
-        if term == 'anbuselvan':
-            return 2.35
-        if term == 'maya':
-            return 2.24
         return tf_component
     
     def bm25(self, doc_id, term):
